@@ -17,33 +17,39 @@
 #  CMAKE_REQUIRED_FLAGS = string of compile command line flags
 #  CMAKE_REQUIRED_DEFINITIONS = list of macros to define (-DFOO=bar)
 #  CMAKE_REQUIRED_INCLUDES = list of include directories
+#  CMAKE_REQUIRED_LIBRARIES = list of libraries to link
+#  CMAKE_REQUIRED_LINK_OPTIONS = list of linker options
+#  CMAKE_REQUIRED_QUIET = suppress check messages
 # Copyright (c) 2009, Michihiro NAKAJIMA
 #
 # Redistribution and use is allowed according to the terms of the BSD license.
 # For details see the accompanying COPYING-CMAKE-SCRIPTS file.
 
 INCLUDE(CheckFunctionExists)
-GET_FILENAME_COMPONENT(_selfdir_CheckFunctionExistsGlibc
-	 "${CMAKE_CURRENT_LIST_FILE}" PATH)
+INCLUDE(CheckCSourceCompiles)
 
 MACRO (CHECK_FUNCTION_EXISTS_GLIBC _FUNC _FUNCVAR)
-   IF(NOT DEFINED ${_FUNCVAR})
-     SET(CHECK_STUB_FUNC_1 "__stub_${_FUNC}")
-     SET(CHECK_STUB_FUNC_2 "__stub___${_FUNC}")
-     CONFIGURE_FILE( ${_selfdir_CheckFunctionExistsGlibc}/CheckFuncs_stub.c.in
-       ${CMAKE_CURRENT_BINARY_DIR}/cmake.tmp/CheckFuncs_stub.c IMMEDIATE)
-     TRY_COMPILE(__stub
-       ${CMAKE_CURRENT_BINARY_DIR}
-       ${CMAKE_CURRENT_BINARY_DIR}/cmake.tmp/CheckFuncs_stub.c
-       COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
-       CMAKE_FLAGS
-       -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_INCLUDE_FILE_FLAGS}
-       "${CHECK_INCLUDE_FILE_C_INCLUDE_DIRS}")
-     IF (__stub)
-       SET("${_FUNCVAR}" "" CACHE INTERNAL "Have function ${_FUNC}")
-     ELSE (__stub)
-       CHECK_FUNCTION_EXISTS("${_FUNC}" "${_FUNCVAR}")
-     ENDIF (__stub)
+  IF(NOT DEFINED ${_FUNCVAR})
+    # Check for glibc stubs and link the function in the same probe.
+    # limits.h and assert.h expose the stub macros without requiring a header
+    # that declares the function.
+    CHECK_C_SOURCE_COMPILES("
+#ifdef __STDC__
+#include <limits.h>
+#else
+#include <assert.h>
+#endif
+#if defined __stub_${_FUNC} || defined __stub___${_FUNC}
+#error ${_FUNC} is a stub
+#endif
+#ifdef __cplusplus
+extern \"C\"
+#endif
+char ${_FUNC}(void);
+int main(void)
+{
+  return ${_FUNC}();
+}
+" ${_FUNCVAR})
   ENDIF(NOT DEFINED ${_FUNCVAR})
 ENDMACRO (CHECK_FUNCTION_EXISTS_GLIBC)
-
